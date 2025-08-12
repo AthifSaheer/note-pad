@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Productivity Notepad</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(to bottom right, #e0e7ff, #e9d5ff);
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+        .modal-content {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            width: 90%;
+            max-width: 400px;
+        }
+        .category-section {
+            transition: all 0.3s ease;
+        }
+        .category-section:hover {
+            transform: translateY(-2px);
+        }
+        .note-card {
+            transition: all 0.3s ease;
+        }
+        .note-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen py-8 px-4">
+    <div class="max-w-6xl mx-auto">
+        <!-- Input Section -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-6">Productivity Notepad</h1>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
+                    <input type="text" id="title" class="mt-1 w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="Enter title">
+                </div>
+                <div>
+                    <label for="category" class="block text-sm font-medium text-gray-700">Category</label>
+                    <div class="flex gap-2">
+                        <select id="category" class="mt-1 w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                            <!-- Categories will be populated here -->
+                        </select>
+                        <button onclick="openCategoryModal()" class="mt-1 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">+</button>
+                    </div>
+                </div>
+                <div>
+                    <label for="deadline" class="block text-sm font-medium text-gray-700">Deadline</label>
+                    <input type="date" id="deadline" class="mt-1 w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="reward" class="block text-sm font-medium text-gray-700">Reward (Optional)</label>
+                    <input type="text" id="reward" class="mt-1 w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="Enter reward">
+                </div>
+                <div class="col-span-1 md:col-span-2">
+                    <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
+                    <textarea id="description" class="mt-1 w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="Enter description" rows="4"></textarea>
+                </div>
+                <div class="col-span-1 md:col-span-2">
+                    <button onclick="addNote()" class="w-full p-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">Add Note</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Modal -->
+        <div id="categoryModal" class="modal">
+            <div class="modal-content">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Add New Category</h2>
+                <input type="text" id="newCategory" class="w-full p-2 border border-gray-300 rounded-lg mb-4" placeholder="Enter category name">
+                <div class="flex justify-end gap-2">
+                    <button onclick="closeCategoryModal()" class="p-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">Cancel</button>
+                    <button onclick="addCategory()" class="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Add</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Listing Section -->
+        <div id="notes-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Category sections will be populated here -->
+        </div>
+
+        <!-- Summary Section -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mt-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Summary</h2>
+            <p class="text-gray-600">Total Notes: <span id="total-notes" class="font-semibold">0</span></p>
+            <p class="text-gray-600">Completed Notes: <span id="completed-notes" class="font-semibold">0</span></p>
+            <p class="text-gray-600">Pending Notes: <span id="pending-notes" class="font-semibold">0</span></p>
+            <button onclick="downloadExcel()" class="mt-4 p-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">Download as Excel</button>
+        </div>
+    </div>
+
+    <script>
+        let notes = JSON.parse(localStorage.getItem('notes')) || [];
+        let categories = JSON.parse(localStorage.getItem('categories')) || [
+            { name: 'Future Goals', color: 'bg-blue-500' },
+            { name: 'Daily Goals', color: 'bg-green-500' },
+            { name: 'Startup Ideas', color: 'bg-yellow-500' },
+            { name: 'Money Management', color: 'bg-red-500' },
+            { name: 'Research Topics', color: 'bg-purple-500' }
+        ];
+
+        function populateCategories() {
+            const categorySelect = document.getElementById('category');
+            categorySelect.innerHTML = categories.map(cat => `<option value="${cat.name}">${cat.name}</option>`).join('');
+        }
+
+        function openCategoryModal() {
+            document.getElementById('categoryModal').style.display = 'flex';
+        }
+
+        function closeCategoryModal() {
+            document.getElementById('categoryModal').style.display = 'none';
+            document.getElementById('newCategory').value = '';
+        }
+
+        function addCategory() {
+            const newCategory = document.getElementById('newCategory').value.trim();
+            if (newCategory && !categories.some(cat => cat.name === newCategory)) {
+                const colors = ['bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-red-500', 'bg-purple-500', 'bg-pink-500', 'bg-teal-500', 'bg-orange-500'];
+                const newColor = colors[categories.length % colors.length];
+                categories.push({ name: newCategory, color: newColor });
+                localStorage.setItem('categories', JSON.stringify(categories));
+                populateCategories();
+                renderNotes();
+                closeCategoryModal();
+                alert('Category added successfully!');
+            } else {
+                alert('Category already exists or is invalid.');
+            }
+        }
+
+        function addNote() {
+            const title = document.getElementById('title').value.trim();
+            const description = document.getElementById('description').value.trim();
+            const category = document.getElementById('category').value;
+            const deadline = document.getElementById('deadline').value;
+            const reward = document.getElementById('reward').value.trim();
+
+            if (title && description && deadline) {
+                const note = {
+                    id: Date.now(),
+                    title,
+                    description,
+                    category,
+                    deadline,
+                    reward,
+                    created: new Date().toISOString(),
+                    completed: false
+                };
+                notes.push(note);
+                localStorage.setItem('notes', JSON.stringify(notes));
+                renderNotes();
+                clearForm();
+                alert('Note added successfully!');
+            } else {
+                alert('Please fill in Title, Description, and Deadline.');
+            }
+        }
+
+        function clearForm() {
+            document.getElementById('title').value = '';
+            document.getElementById('description').value = '';
+            document.getElementById('deadline').value = '';
+            document.getElementById('reward').value = '';
+        }
+
+        function toggleComplete(id) {
+            notes = notes.map(note => 
+                note.id === id ? { ...note, completed: !note.completed } : note
+            );
+            localStorage.setItem('notes', JSON.stringify(notes));
+            renderNotes();
+        }
+
+        function deleteNote(id) {
+            notes = notes.filter(note => note.id !== id);
+            localStorage.setItem('notes', JSON.stringify(notes));
+            renderNotes();
+        }
+
+        function renderNotes() {
+            const container = document.getElementById('notes-container');
+            container.innerHTML = '';
+
+            categories.forEach(cat => {
+                const catNotes = notes.filter(note => note.category === cat.name);
+                const section = document.createElement('div');
+                section.className = 'category-section bg-white rounded-xl shadow-lg p-6';
+                section.innerHTML = `
+                    <h2 class="${cat.color} text-white text-xl font-bold p-3 rounded-t-lg">${cat.name}</h2>
+                    <div class="mt-4 space-y-4">
+                        ${catNotes.length ? catNotes.map(note => `
+                            <div class="note-card bg-gray-50 p-4 rounded-lg ${note.completed ? 'opacity-60 line-through' : ''}">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-800">${note.title}</h3>
+                                        <p class="text-gray-600">${note.description}</p>
+                                        <p class="text-sm text-gray-500">Deadline: ${note.deadline}</p>
+                                        ${note.reward ? `<p class="text-sm text-gray-500">Reward: ${note.reward}</p>` : ''}
+                                        <p class="text-sm text-gray-400">Created: ${new Date(note.created).toLocaleString()}</p>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <input type="checkbox" ${note.completed ? 'checked' : ''} 
+                                               onchange="toggleComplete(${note.id})" class="h-5 w-5 text-indigo-600">
+                                        <button onclick="deleteNote(${note.id})" class="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600">Delete</button>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('') : '<p class="text-gray-500">No notes in this category.</p>'}
+                    </div>
+                `;
+                container.appendChild(section);
+            });
+
+            updateSummary();
+        }
+
+        function updateSummary() {
+            document.getElementById('total-notes').textContent = notes.length;
+            document.getElementById('completed-notes').textContent = 
+                notes.filter(note => note.completed).length;
+            document.getElementById('pending-notes').textContent = 
+                notes.filter(note => !note.completed).length;
+        }
+
+        function downloadExcel() {
+            const data = notes.map(note => ({
+                Title: note.title,
+                Description: note.description,
+                Category: note.category,
+                Deadline: note.deadline,
+                Reward: note.reward,
+                Created: new Date(note.created).toLocaleString(),
+                Completed: note.completed ? 'Yes' : 'No'
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Notes');
+            XLSX.writeFile(wb, 'notes.xlsx');
+        }
+
+        // Initial setup
+        populateCategories();
+        renderNotes();
+    </script>
+</body>
+</html>
